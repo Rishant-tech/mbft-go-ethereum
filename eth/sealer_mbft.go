@@ -252,6 +252,7 @@ func (s *mbftSealer) sealOneBlock(periodSec uint64) {
 			log.Warn("mBFT Sealer: insert block error", "err", err)
 			return
 		}
+		s.eth.blockchain.SetFinalized(sealed.Header())
 		log.Info("mBFT [LOCAL VALIDATOR SEALED BLOCK]",
 			"number", sealed.NumberU64(),
 			"hash", sealed.Hash().Hex(),
