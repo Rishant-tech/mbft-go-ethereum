@@ -36,6 +36,7 @@ GETH_ARGS="--datadir $DATADIR \
     --ws.api eth,net,web3,miner,mbft,admin,debug \
     --ws.origins * \
     --syncmode full \
+    --history.state 0 \
     --nat none \
     --netrestrict 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
