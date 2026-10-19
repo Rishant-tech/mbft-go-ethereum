@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/mbft"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -111,7 +112,7 @@ func (s *mbftSealer) start() {
 	}
 
 	s.mbft.Authorize(validator, s.signFn)
-	log.Info("=== mBFT Autonomous Sealer Active ===", "validator", validator.Hex())
+	log.Info("=== mBFT Autonomous On-Demand Sealer Active ===", "validator", validator.Hex())
 
 	s.wg.Add(1)
 	go s.loop()
@@ -128,39 +129,91 @@ func (s *mbftSealer) stop() {
 	}
 }
 
-// loop runs the periodic block proposal and sealing cycle.
+// loop runs the on-demand block proposal and sealing cycle.
+// Blocks are ONLY produced when transactions exist in the mempool.
 func (s *mbftSealer) loop() {
 	defer s.wg.Done()
 
-	periodSec := uint64(2)
+	periodSec := uint64(1)
 	if cfg := s.eth.blockchain.Config().MBFT; cfg != nil && cfg.Period > 0 {
 		periodSec = cfg.Period
 	}
-	period := time.Duration(periodSec) * time.Second
 
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-
-	// Initial seal attempt after brief startup stabilization
-	select {
-	case <-time.After(500 * time.Millisecond):
-		s.sealOneBlock(periodSec)
-	case <-s.quit:
-		return
+	txsCh := make(chan core.NewTxsEvent, 256)
+	if s.eth.txPool != nil {
+		txsSub := s.eth.txPool.SubscribeTransactions(txsCh, false)
+		defer txsSub.Unsubscribe()
 	}
+
+	trigger := make(chan struct{}, 1)
+	notifyTrigger := func() {
+		select {
+		case trigger <- struct{}{}:
+		default:
+		}
+	}
+
+	// Check if any transactions are already present in txpool
+	if s.eth.txPool != nil {
+		if pending, _ := s.eth.txPool.Stats(); pending > 0 {
+			notifyTrigger()
+		}
+	}
+
+	// Heartbeat checks for pending transactions every 500ms without busy-waiting
+	heartbeat := time.NewTicker(500 * time.Millisecond)
+	defer heartbeat.Stop()
 
 	for {
 		select {
 		case <-s.quit:
 			return
-		case <-ticker.C:
+
+		case ev := <-txsCh:
+			if len(ev.Txs) > 0 {
+				notifyTrigger()
+			}
+
+		case <-heartbeat.C:
+			if s.eth.txPool != nil {
+				if pending, _ := s.eth.txPool.Stats(); pending > 0 {
+					notifyTrigger()
+				}
+			}
+
+		case <-trigger:
+			// Drain buffered triggers
+			for {
+				select {
+				case <-trigger:
+				default:
+					goto drained
+				}
+			}
+		drained:
 			s.sealOneBlock(periodSec)
+
+			// If transactions remain in the pool, schedule another seal run
+			if s.eth.txPool != nil {
+				if pending, _ := s.eth.txPool.Stats(); pending > 0 {
+					notifyTrigger()
+				}
+			}
 		}
 	}
 }
 
 // sealOneBlock inspects pending transactions, constructs work, signs, and inserts a block.
+// On-demand: it strictly aborts if there are no pending transactions.
 func (s *mbftSealer) sealOneBlock(periodSec uint64) {
+	if s.eth.txPool == nil {
+		return
+	}
+	pending, _ := s.eth.txPool.Stats()
+	if pending == 0 {
+		return
+	}
+
 	parent := s.eth.blockchain.CurrentBlock()
 	if parent == nil {
 		return
@@ -204,9 +257,19 @@ func (s *mbftSealer) sealOneBlock(periodSec uint64) {
 		}
 	}
 
+	minTime := parent.Time + periodSec
 	now := uint64(time.Now().Unix())
+	if now < minTime {
+		delay := time.Duration(minTime-now) * time.Second
+		select {
+		case <-time.After(delay):
+			now = uint64(time.Now().Unix())
+		case <-s.quit:
+			return
+		}
+	}
 	if now <= parent.Time {
-		now = parent.Time + periodSec
+		now = parent.Time + 1
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -228,6 +291,11 @@ func (s *mbftSealer) sealOneBlock(periodSec uint64) {
 	}
 
 	block := payload.Block()
+	// Strict on-demand check: never seal or insert an empty block
+	if len(block.Transactions()) == 0 {
+		return
+	}
+
 	header := block.Header()
 
 	// Consensus engine preparation: vanity padding, checkpoint signers, difficulty
