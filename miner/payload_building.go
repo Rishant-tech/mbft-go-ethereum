@@ -162,6 +162,25 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 	return
 }
 
+// Block returns the latest built full block, waiting for construction if necessary.
+func (payload *Payload) Block() *types.Block {
+	payload.lock.Lock()
+	defer payload.lock.Unlock()
+
+	if payload.full == nil {
+		select {
+		case <-payload.stop:
+			return payload.empty
+		default:
+		}
+		payload.cond.Wait()
+	}
+	if payload.full != nil {
+		return payload.full
+	}
+	return payload.empty
+}
+
 // FullBlockAndReceipts returns the latest built full block together with the
 // receipts produced during its construction and the transactions that were
 // tried-and-reverted during building.

@@ -182,6 +182,11 @@ func (s *Snapshot) ViewOfValidator(number uint64, validator common.Address) (uin
 	return 0, false
 }
 
+// Inturn returns true if the validator is scheduled as the primary in-turn leader (view 0).
+func (s *Snapshot) Inturn(number uint64, validator common.Address) bool {
+	return s.inturn(number, validator)
+}
+
 // inturn returns true if the validator is scheduled as the primary in-turn leader (view 0).
 func (s *Snapshot) inturn(number uint64, validator common.Address) bool {
 	return s.Leader(number, 0) == validator

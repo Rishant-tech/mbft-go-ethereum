@@ -64,7 +64,7 @@ func main() {
 	seqKey1Hex := "0000000000000000000000000000000000000000000000000000000000000002"
 	seqKey1, _ := crypto.HexToECDSA(seqKey1Hex)
 	seqAddr1 := crypto.PubkeyToAddress(seqKey1.PublicKey)
-	genesis1 := crypto.Keccak256Hash([]byte("genesis-rollup-1"))
+	genesis1 := crypto.Keccak256Hash(append(big.NewInt(1).Bytes(), big.NewInt(4201).Bytes()...))
 
 	auth.Nonce = nil
 	tx1, err := contract.RegisterRollup(auth, big.NewInt(1), "Rollup-DeFi", seqAddr1, genesis1)
@@ -77,7 +77,7 @@ func main() {
 	seqKey2Hex := "0000000000000000000000000000000000000000000000000000000000000003"
 	seqKey2, _ := crypto.HexToECDSA(seqKey2Hex)
 	seqAddr2 := crypto.PubkeyToAddress(seqKey2.PublicKey)
-	genesis2 := crypto.Keccak256Hash([]byte("genesis-rollup-2"))
+	genesis2 := crypto.Keccak256Hash(append(big.NewInt(2).Bytes(), big.NewInt(4202).Bytes()...))
 
 	auth.Nonce = nil
 	tx2, err := contract.RegisterRollup(auth, big.NewInt(2), "Rollup-Gaming", seqAddr2, genesis2)
