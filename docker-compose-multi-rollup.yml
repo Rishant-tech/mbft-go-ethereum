@@ -1,0 +1,156 @@
+services:
+  # =========================================================================
+  # Layer 1: mBFT Settlement Cluster (2s Blocks, 33% Quorum Resilience)
+  # =========================================================================
+  l1-node1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: geth-mbft:latest
+    container_name: mbft-l1-node1
+    hostname: l1-node1
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      - ETHERBASE=0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf
+      - NETWORK_ID=1337
+      - RPC_PORT=8545
+      - WS_PORT=8546
+      - P2P_PORT=30303
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+    volumes:
+      - ./docker/mbft/genesis.json:/genesis.json:ro
+      - ./docker/mbft/entrypoint.sh:/entrypoint.sh:ro
+      - ./docker/mbft/password.txt:/config/password.txt:ro
+      - ./docker/mbft/node1/keystore:/config/keystore:ro
+      - ./docker/mbft/node1/nodekey:/config/nodekey:ro
+      - l1-node1-data:/data
+    networks:
+      - rollup-mesh
+
+  l1-node2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: geth-mbft:latest
+    container_name: mbft-l1-node2
+    hostname: l1-node2
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      - ETHERBASE=0x2B5AD5c4795c026514f8317c7a215E218DcCD6cF
+      - NETWORK_ID=1337
+      - RPC_PORT=8545
+      - WS_PORT=8546
+      - P2P_PORT=30303
+      - BOOTNODES=enode://311091dd9860e8e20ee13473c1155f5f69635e394704eaa74009452246cfa9b366db656f87d1f04fffd1f04788c06830871ec5a64feee685bd80f0b1286d8374@l1-node1:30303
+    ports:
+      - "8547:8545"
+      - "30304:30303"
+    volumes:
+      - ./docker/mbft/genesis.json:/genesis.json:ro
+      - ./docker/mbft/entrypoint.sh:/entrypoint.sh:ro
+      - ./docker/mbft/password.txt:/config/password.txt:ro
+      - ./docker/mbft/node2/keystore:/config/keystore:ro
+      - ./docker/mbft/node2/nodekey:/config/nodekey:ro
+      - l1-node2-data:/data
+    depends_on:
+      - l1-node1
+    networks:
+      - rollup-mesh
+
+  l1-node3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: geth-mbft:latest
+    container_name: mbft-l1-node3
+    hostname: l1-node3
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      - ETHERBASE=0x6813Eb9362372EEF6200f3b1dbC3f819671cBA69
+      - NETWORK_ID=1337
+      - RPC_PORT=8545
+      - WS_PORT=8546
+      - P2P_PORT=30303
+      - BOOTNODES=enode://311091dd9860e8e20ee13473c1155f5f69635e394704eaa74009452246cfa9b366db656f87d1f04fffd1f04788c06830871ec5a64feee685bd80f0b1286d8374@l1-node1:30303
+    ports:
+      - "8549:8545"
+      - "30305:30303"
+    volumes:
+      - ./docker/mbft/genesis.json:/genesis.json:ro
+      - ./docker/mbft/entrypoint.sh:/entrypoint.sh:ro
+      - ./docker/mbft/password.txt:/config/password.txt:ro
+      - ./docker/mbft/node3/keystore:/config/keystore:ro
+      - ./docker/mbft/node3/nodekey:/config/nodekey:ro
+      - l1-node3-data:/data
+    depends_on:
+      - l1-node1
+    networks:
+      - rollup-mesh
+
+  # =========================================================================
+  # Layer 2: Rollup 1 (DeFi High-Speed Sub-second Execution)
+  # =========================================================================
+  l2-seq-defi:
+    build:
+      context: .
+      dockerfile: Dockerfile.rollup
+    image: rollup-engine:latest
+    container_name: rollup-seq-defi
+    hostname: l2-seq-defi
+    command:
+      - "/usr/local/bin/rollup-sequencer"
+      - "--rollup.id=1"
+      - "--name=Rollup-DeFi"
+      - "--chain.id=4201"
+      - "--blocktime=100"
+      - "--batch.maxsize=100"
+      - "--batch.timeout=2"
+      - "--rpc.host=0.0.0.0"
+      - "--rpc.port=9545"
+      - "--key=0000000000000000000000000000000000000000000000000000000000000002"
+    ports:
+      - "9545:9545"
+    depends_on:
+      - l1-node1
+    networks:
+      - rollup-mesh
+
+  # =========================================================================
+  # Layer 2: Rollup 2 (Gaming / Micro-Transactions Execution)
+  # =========================================================================
+  l2-seq-gaming:
+    build:
+      context: .
+      dockerfile: Dockerfile.rollup
+    image: rollup-engine:latest
+    container_name: rollup-seq-gaming
+    hostname: l2-seq-gaming
+    command:
+      - "/usr/local/bin/rollup-sequencer"
+      - "--rollup.id=2"
+      - "--name=Rollup-Gaming"
+      - "--chain.id=4202"
+      - "--blocktime=100"
+      - "--batch.maxsize=100"
+      - "--batch.timeout=2"
+      - "--rpc.host=0.0.0.0"
+      - "--rpc.port=9547"
+      - "--key=0000000000000000000000000000000000000000000000000000000000000003"
+    ports:
+      - "9547:9547"
+    depends_on:
+      - l1-node1
+    networks:
+      - rollup-mesh
+
+networks:
+  rollup-mesh:
+    driver: bridge
+
+volumes:
+  l1-node1-data:
+  l1-node2-data:
+  l1-node3-data:
