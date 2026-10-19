@@ -72,24 +72,61 @@ $$\text{limit}_{\text{mBFT}} = \max\left(1, \; \left\lfloor \frac{N \times \text
 
 ## 2. Auto Leader Election & View Change Protocol
 
-At every block height $H$ and view number $v \ge 0$:
+At every block height $H$ and view number $v \ge 0$, leader proposal is determined deterministically:
 
 $$\text{Leader}(H, v) = \text{Validators}[(H + v) \pmod N]$$
 
-1. **In-Turn Primary Leader ($v = 0$):**
-   * Scheduled at slot time $T_{\text{slot}} = \text{parent.Time} + \text{Period}$.
-   * Seals block with difficulty `diffInTurn = 2`.
-2. **Automatic View Change ($v > 0$):**
-   * If the primary leader fails to produce a block within $T_{\text{period}}$, all nodes advance their view.
-   * Successor leader for view $v$ calculates its delay:
-     $$\text{delay} = T_{\text{slot}} + (v \times \text{wiggleTime}) - \text{now}$$
-   * Seals block with difficulty `diffNoTurn = 1`.
-   * **Score Penalty:** Any skipped leaders from view $0$ to $v-1$ are penalized by $-2$ points.
-   * **Liveness Reward:** The active leader who finalized the block receives $+1$ point (up to 100).
+### A. Primary In-Turn Leader ($v = 0$)
+* The in-turn validator is calculated via `Inturn(number, validator)` with zero artificial delay.
+* Block timestamp constraint: $T_{\text{slot}} \ge \text{parent.Time} + \text{Period}$.
+* Sealed with difficulty `diffInTurn = 2`.
+
+### B. Automatic Re-Election on Leader Failure ($v > 0$)
+If the primary leader is offline, unresponsive, or partitioned:
+1. Successor validators calculate their assigned view offset:
+   $$\text{view} = \text{ViewOfValidator}(H, \text{validator})$$
+2. In `consensus/mbft/mbft.go`, successor nodes enforce a graduated view-change delay:
+   $$\text{delay} = T_{\text{slot}} + (v \times \text{wiggleTime}) - \text{now} \quad (\text{wiggleTime} = 500\text{ms})$$
+3. If no block arrives before the timeout expires, the successor steps up automatically, seals the block with difficulty `diffNoTurn = 1`, and broadcasts it.
+
+### C. Dynamic Reputation Scoring & Automatic Ejection
+* **Liveness Reward:** Active sealers who successfully produce and finalize a block receive a **`+1` point** score reward (up to a maximum of 100).
+* **Failure Penalty:** When an auto-re-election occurs ($v > 0$), all failed/skipped leaders from view $0$ through $v-1$ are penalized by **`-2` points** in the snapshot.
+* **Automatic Disqualification:** If a validator's score drops below `MinSecurityScore` (default `70`), it is automatically barred from producing blocks (`errInsufficientSecurity`), providing automated slashing and fault isolation without manual intervention.
 
 ---
 
-## 3. Security Validation Fee Model (No Mining Fees)
+## 3. Autonomous Local Sealer & Strict On-Demand Block Production
+
+The mBFT Layer 1 node features an autonomous block proposal and sealing engine (`eth/sealer_mbft.go`):
+
+### A. Autonomous Keystore Discovery
+Upon startup, the sealer discovers validator signing credentials automatically:
+1. Queries `--miner.pending.feeRecipient`.
+2. Inspects local keystore accounts (`keystore.KeyStore`) and unlocks via provided password files.
+3. Fallback to deterministic cluster validator keys for automated container environments.
+4. Automatically authorizes the signing key via `s.mbft.Authorize(validator, s.signFn)`.
+
+### B. Strict On-Demand Block Production (Zero Empty Blocks)
+Unlike legacy PoW or continuous round-robin PoA engines that mint empty blocks every interval, mBFT operates in **strict on-demand mode**:
+* **Event-Driven Sleep:** The sealer subscribes to the transaction pool via `txPool.SubscribeTransactions(txsCh, false)`.
+* **Zero Mempool Inaction:** When the transaction pool is empty (`pending == 0`), the sealer sleeps completely. No empty blocks are proposed, sealed, or imported.
+* **Instant Wakeup:** As soon as transactions arrive (e.g., from users, smart contracts, or Rollup batchers), the sealer instantly triggers `sealOneBlock()`, gathers mempool transactions, verifies timestamps, signs the header, and commits the block to canonical storage via `InsertChain()`.
+* **Block Finality Registration:** Calls `s.eth.blockchain.SetFinalized(sealed.Header())` upon insertion, providing immediate finality and eliminating EIP-4844 blob-pool warnings.
+
+---
+
+## 4. Strict Network Isolation for Fresh Consensus Networks
+
+For independent or private mBFT networks that must never peer with public Ethereum networks or import external blocks:
+* `--nodiscover`: Completely disables the P2P node discovery protocol.
+* `--nat none`: Disables NAT traversal to prevent external incoming connections.
+* `--netrestrict 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`: Restricts network communication strictly to private/internal subnets.
+* With `net_peerCount = 0`, the network operates in complete isolation, producing blocks exclusively through authorized local mBFT validators.
+
+---
+
+## 5. Security Validation Fee Model (No Mining Fees)
 
 In mBFT, there is no proof-of-work puzzle solving. Fees represent real computational and cybersecurity validation:
 
@@ -101,7 +138,7 @@ In mBFT, there is no proof-of-work puzzle solving. Fees represent real computati
 
 ---
 
-## 4. Genesis Configuration Example
+## 6. Genesis Configuration Example
 
 To launch an mBFT network, define `"mbft"` in `genesis.json`:
 
@@ -143,7 +180,7 @@ To launch an mBFT network, define `"mbft"` in `genesis.json`:
 
 ---
 
-## 5. RPC API Reference (`mbft` Namespace)
+## 7. RPC API Reference (`mbft` Namespace)
 
 The mBFT engine exposes administrative and inspection endpoints under the `mbft` namespace (enabled by passing `--http.api mbft` or `--ws.api mbft`):
 
@@ -158,7 +195,7 @@ The mBFT engine exposes administrative and inspection endpoints under the `mbft`
 
 ---
 
-## 6. Running with Docker Compose
+## 8. Running with Docker Compose
 
 A complete 3-node validator cluster is configured in the repository root:
 
@@ -189,7 +226,7 @@ docker compose logs -f node1
 
 ---
 
-## 7. Standalone Node CLI Execution
+## 9. Standalone Node CLI Execution
 
 To run an mBFT validator manually without Docker:
 
@@ -210,7 +247,7 @@ geth --datadir ./data \
 
 ---
 
-## 8. Unit Testing & Verification
+## 10. Unit Testing & Verification
 
 Comprehensive test suites for quorum math, header validation, continuous 33% block production, view changes, and reward crediting are located in `consensus/mbft/mbft_test.go`:
 
