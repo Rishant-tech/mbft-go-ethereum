@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 )
@@ -175,6 +176,7 @@ func (s *mbftSealer) loop() {
 			}
 
 		case <-heartbeat.C:
+			s.syncFromPeers()
 			if s.eth.txPool != nil {
 				if pending, _ := s.eth.txPool.Stats(); pending > 0 {
 					notifyTrigger()
@@ -191,6 +193,7 @@ func (s *mbftSealer) loop() {
 				}
 			}
 		drained:
+			s.syncFromPeers()
 			s.sealOneBlock(periodSec)
 
 			// If transactions remain in the pool, schedule another seal run
@@ -206,6 +209,7 @@ func (s *mbftSealer) loop() {
 // sealOneBlock inspects pending transactions, constructs work, signs, and inserts a block.
 // On-demand: it strictly aborts if there are no pending transactions.
 func (s *mbftSealer) sealOneBlock(periodSec uint64) {
+	s.syncFromPeers()
 	if s.eth.txPool == nil {
 		return
 	}
@@ -334,5 +338,138 @@ func (s *mbftSealer) sealOneBlock(periodSec uint64) {
 	case <-time.After(3 * time.Second):
 		close(stop)
 		return
+	}
+}
+
+// syncFromPeers queries connected peers for any blocks higher than local head
+// and inserts them into canonical storage.
+func (s *mbftSealer) syncFromPeers() {
+	if s.eth == nil || s.eth.handler == nil || s.eth.handler.peers == nil {
+		return
+	}
+	s.eth.handler.peers.lock.RLock()
+	peerlist := make([]*ethPeer, 0, len(s.eth.handler.peers.peers))
+	for _, p := range s.eth.handler.peers.peers {
+		peerlist = append(peerlist, p)
+	}
+	s.eth.handler.peers.lock.RUnlock()
+
+	for _, p := range peerlist {
+		if p == nil || p.Peer == nil {
+			continue
+		}
+		for {
+			currentHead := s.eth.blockchain.CurrentBlock()
+			if currentHead == nil {
+				break
+			}
+			nextNumber := currentHead.Number.Uint64() + 1
+
+			if br := p.BlockRange(); br != nil && br.LatestBlock < nextNumber {
+				break
+			}
+
+			hdrSink := make(chan *ethproto.Response, 1)
+			req, err := p.RequestHeadersByNumber(nextNumber, 1, 0, false, hdrSink)
+			if err != nil {
+				break
+			}
+
+			var header *types.Header
+			select {
+			case res := <-hdrSink:
+				if res == nil {
+					break
+				}
+				if res.Done != nil {
+					res.Done <- nil
+				}
+				if res.Res == nil {
+					break
+				}
+				hdrs, ok := res.Res.(*ethproto.BlockHeadersRequest)
+				if !ok || hdrs == nil || len(*hdrs) == 0 {
+					break
+				}
+				header = (*hdrs)[0]
+			case <-time.After(1 * time.Second):
+				req.Close()
+				break
+			case <-s.quit:
+				req.Close()
+				return
+			}
+			if header == nil {
+				break
+			}
+
+			bodySink := make(chan *ethproto.Response, 1)
+			bodyReq, err := p.RequestBodies([]common.Hash{header.Hash()}, bodySink)
+			if err != nil {
+				break
+			}
+
+			var body *ethproto.BlockBody
+			select {
+			case res := <-bodySink:
+				if res == nil {
+					break
+				}
+				if res.Done != nil {
+					res.Done <- nil
+				}
+				if res.Res == nil {
+					break
+				}
+				bds, ok := res.Res.(*ethproto.BlockBodiesResponse)
+				if !ok || bds == nil || len(*bds) == 0 {
+					break
+				}
+				body = &(*bds)[0]
+			case <-time.After(1 * time.Second):
+				bodyReq.Close()
+				break
+			case <-s.quit:
+				bodyReq.Close()
+				return
+			}
+			if body == nil {
+				break
+			}
+
+			var txs []*types.Transaction
+			if body.Transactions.Len() > 0 {
+				txs, _ = body.Transactions.Items()
+			}
+			var uncles []*types.Header
+			if body.Uncles.Len() > 0 {
+				uncles, _ = body.Uncles.Items()
+			}
+			var wds []*types.Withdrawal
+			if header.WithdrawalsHash != nil {
+				wds = make([]*types.Withdrawal, 0)
+			}
+			if body.Withdrawals != nil && body.Withdrawals.Len() > 0 {
+				wds, _ = body.Withdrawals.Items()
+			}
+
+			block := types.NewBlockWithHeader(header).WithBody(types.Body{
+				Transactions: txs,
+				Uncles:       uncles,
+				Withdrawals:  wds,
+			})
+
+			if _, err := s.eth.blockchain.InsertChain(types.Blocks{block}); err != nil {
+				log.Warn("mBFT Sealer: sync block insert error", "number", block.NumberU64(), "err", err)
+				break
+			}
+			s.eth.blockchain.SetFinalized(block.Header())
+			log.Info("mBFT [SYNCED BLOCK FROM PEER]",
+				"number", block.NumberU64(),
+				"hash", block.Hash().Hex(),
+				"txs", len(block.Transactions()),
+				"peer", p.ID(),
+			)
+		}
 	}
 }

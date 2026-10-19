@@ -26,7 +26,8 @@ services:
       - ./docker/mbft/node1/nodekey:/config/nodekey:ro
       - node1-data:/data
     networks:
-      - mbft-net
+      mbft-net:
+        ipv4_address: 172.20.0.11
 
   node2:
     build:
@@ -43,7 +44,6 @@ services:
       - RPC_PORT=8545
       - WS_PORT=8546
       - P2P_PORT=30303
-      - BOOTNODES=enode://311091dd9860e8e20ee13473c1155f5f69635e394704eaa74009452246cfa9b366db656f87d1f04fffd1f04788c06830871ec5a64feee685bd80f0b1286d8374@node1:30303
     ports:
       - "8547:8545"
       - "8548:8546"
@@ -58,7 +58,8 @@ services:
     depends_on:
       - node1
     networks:
-      - mbft-net
+      mbft-net:
+        ipv4_address: 172.20.0.12
 
   node3:
     build:
@@ -75,7 +76,6 @@ services:
       - RPC_PORT=8545
       - WS_PORT=8546
       - P2P_PORT=30303
-      - BOOTNODES=enode://311091dd9860e8e20ee13473c1155f5f69635e394704eaa74009452246cfa9b366db656f87d1f04fffd1f04788c06830871ec5a64feee685bd80f0b1286d8374@node1:30303
     ports:
       - "8549:8545"
       - "8550:8546"
@@ -90,11 +90,15 @@ services:
     depends_on:
       - node1
     networks:
-      - mbft-net
+      mbft-net:
+        ipv4_address: 172.20.0.13
 
 networks:
   mbft-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   node1-data:
