@@ -537,6 +537,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				beaconHeaders.add(size)
 			case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 				cliqueSnaps.add(size)
+			case bytes.HasPrefix(key, MbftSnapshotPrefix) && len(key) == 5+common.HashLength:
+				cliqueSnaps.add(size)
 
 			// new log index
 			case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:

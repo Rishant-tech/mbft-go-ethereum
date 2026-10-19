@@ -577,8 +577,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database, tracer *tra
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	if config.Clique != nil && len(g.ExtraData) < 32+crypto.SignatureLength {
-		return nil, errors.New("can't start clique chain without signers")
+	if (config.Clique != nil || config.MBFT != nil) && len(g.ExtraData) < 32+crypto.SignatureLength {
+		return nil, errors.New("can't start clique/mbft chain without signers")
 	}
 	// flush the data to disk and compute the state root
 	root, err := flushAlloc(&g.Alloc, triedb, tracer)
