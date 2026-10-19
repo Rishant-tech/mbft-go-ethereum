@@ -414,8 +414,7 @@ func makeExtraData(extra []byte) []byte {
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append all the local APIs and return
-	return append(apis, []rpc.API{
+	apis = append(apis, []rpc.API{
 		{
 			Namespace: "miner",
 			Service:   NewMinerAPI(s),
@@ -433,6 +432,10 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   s.netRPCService,
 		},
 	}...)
+	if eng, ok := s.engine.(interface{ APIs(consensus.ChainHeaderReader) []rpc.API }); ok {
+		apis = append(apis, eng.APIs(s.blockchain)...)
+	}
+	return apis
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {

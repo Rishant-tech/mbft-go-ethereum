@@ -211,6 +211,20 @@ There are three different solutions depending on your use case:
   * If you are looking for a simple way to test smart contracts from go in your CI, you can use the [Simulated Backend](https://geth.ethereum.org/docs/developers/dapp-developer/native-bindings#blockchain-simulator).
   * If you want a convenient single node environment for testing, you can use our [Dev Mode](https://geth.ethereum.org/docs/developers/dapp-developer/dev-mode).
   * If you are looking for a multiple node test network, you can set one up quite easily with [Kurtosis](https://geth.ethereum.org/docs/fundamentals/kurtosis).
+  * If you are deploying an enterprise, private, or high-resilience network, use the native **mBFT Consensus Engine**.
+
+### mBFT Consensus Engine (Enterprise & Private Networks)
+
+This Go-Ethereum fork includes **mBFT (Modified Byzantine Fault Tolerance)**, a standalone, high-resilience BFT consensus engine designed for enterprise networks and high-assurance infrastructure that operates without requiring an external beacon chain:
+
+* **33% Minimum Quorum Resilience:** Maintains block production and finality even if up to 67% of validators are offline or degraded, eliminating classical BFT deadlocks.
+* **Deterministic Auto-Leader Election:** Round-robin leader assignment based on block height and view ($\text{Leader}(H, v) = \text{Validators}[(H + v) \pmod N]$).
+* **Automatic View Change & Penalties:** Fallback to successor leaders with incremental delays ($v \times \text{wiggleTime}$); unresponsive leaders are dynamically penalized (-2 points) while active sealers receive liveness rewards (+1 point).
+* **Worker & Inspector Node Architecture:** Leaders inspect transaction signatures, nonces, balances, and security posture before sealing blocks.
+* **Security Validation Reward Model:** Transaction gas fees are deducted from senders and distributed as security validation rewards, completely replacing PoW "mining fee" concepts.
+* **Docker Compose Multi-Node Cluster:** Spin up a 3-validator network instantly with `docker compose up -d`.
+
+For architecture details, mathematical quorum proofs, RPC reference, and tutorials, see the [mBFT Consensus Documentation](docs/consensus/mbft.md) and ready-to-run [genesis-mbft.json](genesis-mbft.json).
 
 ## Contribution
 
