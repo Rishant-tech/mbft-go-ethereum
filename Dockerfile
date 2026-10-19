@@ -3,8 +3,10 @@ ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
 
+ARG GO_VERSION=1.25-alpine
+
 # Build Geth in a stock Go builder container
-FROM golang:1.27-alpine AS builder
+FROM golang:${GO_VERSION} AS builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
 

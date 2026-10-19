@@ -352,6 +352,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
+	MBFT               *MBFTConfig         `json:"mbft,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
 }
 
@@ -372,6 +373,28 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c CliqueConfig) String() string {
 	return fmt.Sprintf("clique(period: %d, epoch: %d)", c.Period, c.Epoch)
+}
+
+// MBFTConfig is the consensus engine configs for modified Byzantine fault tolerance based sealing.
+type MBFTConfig struct {
+	Period           uint64   `json:"period"`                     // Number of seconds between blocks to enforce
+	Epoch            uint64   `json:"epoch"`                      // Epoch length to reset votes and checkpoint
+	MinQuorum        uint64   `json:"minQuorum,omitempty"`        // Minimum active quorum percentage (default 33%)
+	MinSecurityScore uint64   `json:"minSecurityScore,omitempty"` // Minimum security score required to sign (default 70)
+	BlockReward      *big.Int `json:"blockReward,omitempty"`      // Security validation reward for producing a block
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c MBFTConfig) String() string {
+	minQ := c.MinQuorum
+	if minQ == 0 {
+		minQ = 33
+	}
+	minScore := c.MinSecurityScore
+	if minScore == 0 {
+		minScore = 70
+	}
+	return fmt.Sprintf("mbft(period: %d, epoch: %d, minQuorum: %d%%, minSecurityScore: %d)", c.Period, c.Epoch, minQ, minScore)
 }
 
 // String implements the fmt.Stringer interface, returning a string representation
@@ -490,6 +513,8 @@ func (c *ChainConfig) Description() string {
 		banner += "Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n"
 	case c.Clique != nil:
 		banner += "Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n"
+	case c.MBFT != nil:
+		banner += fmt.Sprintf("Consensus: mBFT (Modified Byzantine Fault Tolerance: period %ds, epoch %d)\n", c.MBFT.Period, c.MBFT.Epoch)
 	default:
 		banner += "Consensus: unknown\n"
 	}
