@@ -11,6 +11,15 @@
     "istanbulBlock": 0,
     "berlinBlock": 0,
     "londonBlock": 0,
+    "shanghaiTime": 0,
+    "cancunTime": 0,
+    "blobSchedule": {
+      "cancun": {
+        "target": 3,
+        "max": 6,
+        "baseFeeUpdateFraction": 3338477
+      }
+    },
     "mbft": {
       "period": 2,
       "epoch": 30000,

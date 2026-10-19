@@ -35,7 +35,9 @@ GETH_ARGS="--datadir $DATADIR \
     --ws.port ${WS_PORT:-8546} \
     --ws.api eth,net,web3,miner,mbft \
     --ws.origins * \
-    --nodiscover"
+    --nodiscover \
+    --nat none \
+    --netrestrict 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 if [ -f "$NODEKEY_FILE" ]; then
     GETH_ARGS="$GETH_ARGS --nodekey $NODEKEY_FILE"

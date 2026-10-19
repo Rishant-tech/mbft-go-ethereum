@@ -516,6 +516,11 @@ func (m *MBFT) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	}
 }
 
+// Snapshot retrieves the validator authorization snapshot for a block.
+func (m *MBFT) Snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
+	return m.snapshot(chain, number, hash, parents)
+}
+
 // snapshot retrieves the validator authorization snapshot for a block.
 func (m *MBFT) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	var (

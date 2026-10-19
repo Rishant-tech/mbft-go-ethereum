@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/mbft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -128,6 +129,8 @@ type Ethereum struct {
 	netRPCService *ethapi.NetAPI
 
 	p2pServer *p2p.Server
+
+	mbftSealer *mbftSealer
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
@@ -384,6 +387,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
+	if eng, ok := eth.engine.(*mbft.MBFT); ok {
+		eth.mbftSealer = newMBFTSealer(eth, eng)
+	}
+
 	stack.RegisterLifecycle(eth)
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
@@ -492,6 +499,10 @@ func (s *Ethereum) Start() error {
 	// start log indexer
 	s.filterMaps.Start()
 	go s.updateFilterMapsHeads()
+
+	if s.mbftSealer != nil {
+		s.mbftSealer.start()
+	}
 	return nil
 }
 
@@ -619,6 +630,9 @@ func (s *Ethereum) Stop() error {
 	s.filterMaps.Stop()
 	s.blobCache.Stop()
 	s.txPool.Close()
+	if s.mbftSealer != nil {
+		s.mbftSealer.stop()
+	}
 	s.blockchain.Stop()
 	s.engine.Close()
 

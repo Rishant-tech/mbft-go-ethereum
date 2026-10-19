@@ -101,6 +101,20 @@ func (miner *Miner) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return pending.block, pending.receipts, pending.stateDB.Copy()
 }
 
+// PendingFeeRecipient returns the configured address for pending block rewards.
+func (miner *Miner) PendingFeeRecipient() common.Address {
+	miner.confMu.RLock()
+	defer miner.confMu.RUnlock()
+	return miner.config.PendingFeeRecipient
+}
+
+// SetPendingFeeRecipient sets the configured address for pending block rewards.
+func (miner *Miner) SetPendingFeeRecipient(addr common.Address) {
+	miner.confMu.Lock()
+	defer miner.confMu.Unlock()
+	miner.config.PendingFeeRecipient = addr
+}
+
 // SetExtra sets the content used to initialize the block extra field.
 func (miner *Miner) SetExtra(extra []byte) error {
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
