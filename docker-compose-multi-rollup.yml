@@ -7,6 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-l1-node1
     hostname: l1-node1
     entrypoint: ["/entrypoint.sh"]
@@ -35,6 +36,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-l1-node2
     hostname: l1-node2
     entrypoint: ["/entrypoint.sh"]
@@ -65,6 +67,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-l1-node3
     hostname: l1-node3
     entrypoint: ["/entrypoint.sh"]
@@ -98,6 +101,7 @@ services:
       context: .
       dockerfile: Dockerfile.rollup
     image: rollup-engine:latest
+    pull_policy: build
     container_name: rollup-seq-defi
     hostname: l2-seq-defi
     command:
@@ -126,6 +130,7 @@ services:
       context: .
       dockerfile: Dockerfile.rollup
     image: rollup-engine:latest
+    pull_policy: build
     container_name: rollup-seq-gaming
     hostname: l2-seq-gaming
     command:

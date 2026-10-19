@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+set -f
 
 DATADIR="/data"
 GENESIS="/genesis.json"
@@ -34,7 +35,6 @@ GETH_ARGS="--datadir $DATADIR \
     --ws.port ${WS_PORT:-8546} \
     --ws.api eth,net,web3,miner,mbft \
     --ws.origins * \
-    --allow-insecure-unlock \
     --nodiscover"
 
 if [ -f "$NODEKEY_FILE" ]; then
@@ -42,7 +42,7 @@ if [ -f "$NODEKEY_FILE" ]; then
 fi
 
 if [ -n "$ETHERBASE" ]; then
-    GETH_ARGS="$GETH_ARGS --miner.etherbase $ETHERBASE --mine --unlock $ETHERBASE --password $PASSWORD_FILE"
+    GETH_ARGS="$GETH_ARGS --miner.pending.feeRecipient $ETHERBASE"
 fi
 
 if [ -n "$BOOTNODES" ]; then
