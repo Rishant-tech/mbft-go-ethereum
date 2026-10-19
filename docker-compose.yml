@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-node1
     hostname: node1
     entrypoint: ["/entrypoint.sh"]
@@ -32,6 +33,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-node2
     hostname: node2
     entrypoint: ["/entrypoint.sh"]
@@ -63,6 +65,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: geth-mbft:latest
+    pull_policy: build
     container_name: mbft-node3
     hostname: node3
     entrypoint: ["/entrypoint.sh"]
